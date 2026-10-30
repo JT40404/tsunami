@@ -6,6 +6,9 @@ export const env = {
   cg: process.env.CG_PRO_API_KEY,
   mint: process.env.TOKEN_MINT,
   wallet: process.env.BUYBACK_WALLET,
+  // The asset TSUNAMI is paired with. Defaults to PUMP (pump.fun Custom Pairs).
+  quote: process.env.QUOTE_MINT || "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+  quoteSymbol: process.env.QUOTE_SYMBOL || "PUMP",
 };
 
 export const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";       // pump.fun bonding curve program
@@ -38,9 +41,10 @@ export async function migration() {
     const j = await json(`https://api.dexscreener.com/latest/dex/tokens/${env.mint}`);
     const pairs = (j.pairs || []).filter(p => p.chainId === "solana");
     const curve = pairs.find(p => p.dexId === "pumpfun");
-    const amm = pairs
-      .filter(p => p.dexId !== "pumpfun")
-      .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    // Prefer the PumpSwap pool against our quote asset; ignore pools other people create elsewhere.
+    const byLiq = (a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0);
+    const amm = pairs.filter(p => p.dexId === "pumpswap" && p.quoteToken?.address === env.quote).sort(byLiq)[0]
+             || pairs.filter(p => p.dexId === "pumpswap").sort(byLiq)[0];
     return {
       migrated: !!amm,
       at: amm?.pairCreatedAt || null,

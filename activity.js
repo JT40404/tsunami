@@ -1,6 +1,7 @@
 // GET /api/activity
 // Reads the buyback wallet's on-chain history (Helius Parsed Events) and turns it into
-// buyback / burn / add_lp entries, each tagged with its phase:
+// buyback / burn / add_lp entries. Spending is recorded in the quote asset (PUMP) and,
+// separately, in SOL (for buys routed from SOL through PUMP). Each entry is tagged with its phase:
 //   phase 1 = on the pump.fun curve, phase 2 = after migration to PumpSwap.
 import { env, json, migration, send, fail, requireEnv, PUMP, PUMP_AMM, WSOL, INCINERATOR, TOKEN_PROGRAMS } from "./_lib.js";
 
@@ -49,7 +50,8 @@ function classify(item, migratedAt) {
   const programs = new Set(ins.map(x => x.programId));
   const tt = p.tokenTransfers || [], nt = p.nativeTransfers || [];
 
-  let tokIn = 0, tokOut = 0, burned = 0, solOut = 0;
+  let tokIn = 0, tokOut = 0, burned = 0, solOut = 0, quoteOut = 0;
+  const Q = env.quote;
   for (const t of tt) {
     const a = amountOf(t);
     if (t.mint === M) {
@@ -62,6 +64,10 @@ function classify(item, migratedAt) {
     if (t.mint === WSOL) {
       if (t.fromUserAccount === W) solOut += a;
       if (t.toUserAccount === W) solOut -= a;
+    }
+    if (Q !== WSOL && t.mint === Q) {
+      if (t.fromUserAccount === W) quoteOut += a;
+      if (t.toUserAccount === W) quoteOut -= a;
     }
   }
   for (const n of nt) {
@@ -80,6 +86,11 @@ function classify(item, migratedAt) {
     }
   }
 
+  if (Q === WSOL) { quoteOut += solOut; solOut = 0; }
+  if (solOut < 0.005) solOut = 0;          // ignore fees and account rent
+  if (quoteOut < 0) quoteOut = 0;
+  const spent = quoteOut > 0 || solOut > 0;
+
   const onCurve = programs.has(PUMP);
   const onAmm = programs.has(PUMP_AMM);
   const phase = onAmm ? 2 : onCurve ? 1 : migratedAt && ts >= migratedAt ? 2 : 1;
@@ -88,9 +99,9 @@ function classify(item, migratedAt) {
 
   const base = { tx: item.signature || p.signature, ts, phase };
   const out = [];
-  if (isDeposit && tokOut > 0) out.push({ ...base, type: "add_lp", sol: Math.max(0, solOut), tokens: tokOut });
-  else if (tokIn > 0 && solOut > 0) out.push({ ...base, type: "buyback", sol: solOut, tokens: tokIn });
-  if (burned > 0) out.push({ ...base, type: "burn", sol: 0, tokens: burned });
+  if (isDeposit && tokOut > 0) out.push({ ...base, type: "add_lp", quote: quoteOut, sol: solOut, tokens: tokOut });
+  else if (tokIn > 0 && spent) out.push({ ...base, type: "buyback", quote: quoteOut, sol: solOut, tokens: tokIn });
+  if (burned > 0) out.push({ ...base, type: "burn", quote: 0, sol: 0, tokens: burned });
   return out;
 }
 
@@ -99,7 +110,7 @@ export default async function handler(req, res) {
   try {
     const [items, mig] = await Promise.all([history(), migration()]);
     const entries = items.flatMap(it => classify(it, mig.at)).sort((a, b) => a.ts - b.ts);
-    send(res, { wallet: env.wallet, migratedAt: mig.at, migrated: mig.migrated, count: entries.length, entries }, 120);
+    send(res, { wallet: env.wallet, quote: { mint: env.quote, symbol: env.quoteSymbol }, migratedAt: mig.at, migrated: mig.migrated, count: entries.length, entries }, 120);
   } catch (e) {
     fail(res, e);
   }

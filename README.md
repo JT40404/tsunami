@@ -5,6 +5,9 @@ Live tracker for the TSUNAMI token.
 - **Phase 1 (on the pump.fun curve):** buybacks are burned, so supply shrinks.
 - **Phase 2 (after migration to PumpSwap):** buybacks are added to the pool, so liquidity grows.
 
+TSUNAMI is a pump.fun Custom Pair quoted in **PUMP**, not SOL. The site counts curve reserves, buyback
+spending and liquidity in PUMP. Buys you route from SOL are detected too and converted at today's price.
+
 ## What's in here
 
 | file | does |
@@ -27,6 +30,7 @@ Your API keys only live in the server environment. Responses are cached at the e
    - `CG_PRO_API_KEY`
    - `TOKEN_MINT`: your token's mint address
    - `BUYBACK_WALLET`: the wallet you do every buyback, burn and liquidity add from
+   - Optional: `QUOTE_MINT` / `QUOTE_SYMBOL` if you ever pair with something other than PUMP.
 3. Redeploy. Open the site; the sidebar should show **mode: api** and every line **ok**.
 
 To test locally with the functions: `npx vercel dev`, using a `.env` file copied from `.env.example`.
@@ -37,9 +41,9 @@ Opening `index.html` directly shows demo data (add `?phase=1` to preview phase 1
 Detection works by watching one wallet, so:
 
 - Do every buyback, burn and liquidity add from `BUYBACK_WALLET`.
-- Phase 1: buy on the curve, then burn (same transaction or a separate one, both are detected).
+- Phase 1: buy on the curve with PUMP (or SOL routed through PUMP), then burn. Same transaction or separate, both are detected.
   Burns are detected as SPL burn instructions or transfers to the incinerator address.
-- Phase 2: buy on PumpSwap, then deposit into the TSUNAMI/SOL pool from the same wallet.
+- Phase 2: buy on PumpSwap, then deposit TSUNAMI + PUMP into the TSUNAMI/PUMP pool from the same wallet.
 - Don't use that wallet for anything else involving TSUNAMI, or it will show up on the site.
 
 If something is misread, fix it without code changes in `index.html`:
@@ -47,5 +51,5 @@ If something is misread, fix it without code changes in `index.html`:
 
 ## Edit in index.html
 
-`CONFIG` at the bottom of the file: links, `liquidityGoalSol`, `roadmapDone`.
+`CONFIG` at the bottom of the file: links, `liquidityGoal` (in PUMP), `roadmapDone`.
 The project.txt story paragraph is in the HTML. Search for "Replace this paragraph".

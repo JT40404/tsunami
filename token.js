@@ -1,7 +1,18 @@
 // GET /api/token
 // Supply, authorities, bonding curve progress, migration status and labelled top holders.
 import { PublicKey } from "@solana/web3.js";
-import { env, rpc, migration, send, fail, requireEnv, PUMP } from "./_lib.js";
+import { env, rpc, json, migration, send, fail, requireEnv, PUMP, WSOL } from "./_lib.js";
+
+// USD prices of the quote asset and SOL, so buybacks paid in either can be added up.
+async function quotePrices() {
+  if (!env.cg) return null;
+  try {
+    const j = await json(`https://pro-api.coingecko.com/api/v3/onchain/simple/networks/solana/token_price/${env.quote},${WSOL}`,
+      { headers: { accept: "application/json", "x-cg-pro-api-key": env.cg } });
+    const p = j?.data?.attributes?.token_prices || {};
+    return { quoteUsd: Number(p[env.quote]) || null, solUsd: Number(p[WSOL]) || null };
+  } catch { return null; }
+}
 
 const INITIAL_REAL_TOKEN_RESERVES = 793_100_000; // tokens sold along a pump.fun curve before it completes
 
@@ -11,32 +22,36 @@ export default async function handler(req, res) {
     const mint = new PublicKey(env.mint);
     const [curvePda] = PublicKey.findProgramAddressSync([Buffer.from("bonding-curve"), mint.toBuffer()], new PublicKey(PUMP));
 
-    const [mintAcc, largest, curveAcc, mig] = await Promise.all([
+    const [mintAcc, quoteAcc, largest, curveAcc, mig, prices] = await Promise.all([
       rpc("getAccountInfo", [env.mint, { encoding: "jsonParsed" }]),
+      rpc("getAccountInfo", [env.quote, { encoding: "jsonParsed" }]).catch(() => null),
       rpc("getTokenLargestAccounts", [env.mint]).catch(() => ({ value: [] })),
       rpc("getAccountInfo", [curvePda.toBase58(), { encoding: "base64" }]).catch(() => null),
       migration(),
+      quotePrices(),
     ]);
+    const quoteDecimals = quoteAcc?.value?.data?.parsed?.info?.decimals ?? 6;
 
     const info = mintAcc?.value?.data?.parsed?.info;
     if (!info) throw new Error("Mint account not found. Check TOKEN_MINT.");
     const decimals = info.decimals;
     const supply = Number(info.supply) / 10 ** decimals;
 
-    // Bonding curve account layout: 8-byte discriminator, then u64 virtualToken, virtualSol,
-    // realToken, realSol, tokenTotalSupply, then a bool "complete".
+    // Bonding curve account layout: 8-byte discriminator, then u64 virtualToken, virtualQuote,
+    // realToken, realQuote, tokenTotalSupply, then a bool "complete".
+    // On a Custom Pair the "quote" fields are counted in the quote asset (PUMP), not SOL.
     let curve = null;
     const cv = curveAcc?.value;
     if (cv && cv.owner === PUMP) {
       const buf = Buffer.from(cv.data[0], "base64");
       const realToken = Number(buf.readBigUInt64LE(24)) / 10 ** decimals;
-      const realSol = Number(buf.readBigUInt64LE(32)) / 1e9;
+      const realQuote = Number(buf.readBigUInt64LE(32)) / 10 ** quoteDecimals;
       const complete = buf[48] === 1;
       curve = {
         address: curvePda.toBase58(),
         complete,
-        progress: complete ? 1 : Math.min(1, Math.max(0, 1 - realToken / INITIAL_REAL_TOKEN_RESERVES)),
-        realSol,
+        progress: complete ? 1 : realToken > 0 && realToken <= 1e9 ? Math.min(1, Math.max(0, 1 - realToken / INITIAL_REAL_TOKEN_RESERVES)) : null,
+        realQuote,
         realToken,
       };
     }
@@ -62,6 +77,8 @@ export default async function handler(req, res) {
       wallet: env.wallet || null,
       decimals,
       supply,
+      quote: { mint: env.quote, symbol: env.quoteSymbol, decimals: quoteDecimals },
+      prices,
       mintAuthority: info.mintAuthority || null,
       freezeAuthority: info.freezeAuthority || null,
       curve,
