@@ -4,7 +4,7 @@
 
 | file | what it is |
 |---|---|
-| `index.html` | **The live site.** A landing page explaining the burn-then-build model, plus a live market page for your CA. No keys or backend needed. |
+| `index.html` | **The live site.** A landing page explaining the build-then-burn model, plus a live market page for your CA. No keys or backend needed. |
 | `full.html` | The original full site: phases, supply, buyback log, project and contract pages. Needs the `api/` functions. |
 | `api/` | Serverless functions used only by `full.html` (Helius + CoinGecko Pro). |
 | `package.json`, `.env.example` | Setup for the `api/` functions. |
