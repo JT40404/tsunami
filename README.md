@@ -8,6 +8,7 @@
 | `full.html` | The original full site: phases, supply, buyback log, project and contract pages. Needs the `api/` functions. |
 | `api/` | Serverless functions used only by `full.html` (Helius + CoinGecko Pro). |
 | `package.json`, `.env.example` | Setup for the `api/` functions. |
+| `bot/` | The fee bot: collects creator fees and spends them on buybacks, burns and liquidity. Runs on your own machine. See `bot/README.md`. |
 
 ## Set your contract address
 

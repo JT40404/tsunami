@@ -1,0 +1,20 @@
+{
+  "name": "tsunami-fee-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Non-custodial fee bot: claims pump.fun creator fees and spends them on buybacks, burns and liquidity.",
+  "scripts": {
+    "check": "node bot.mjs --check",
+    "once": "node bot.mjs --once",
+    "start": "node bot.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@pump-fun/pump-sdk": "4.2.0",
+    "@pump-fun/pump-swap-sdk": "2.2.0",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.98.0",
+    "bn.js": "5.2.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "network": "mainnet",
+  "rpcUrl": "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
+  "mint": "YOUR_TOKEN_MINT",
+  "walletKeypair": "./wallet.json",
+
+  "split": {
+    "curve": { "burnPct": 0 },
+    "pool":  { "burnPct": 100 }
+  },
+  "lpTokens": "burn",
+
+  "slippagePct": 5,
+  "intervalMinutes": 10,
+  "minSpend": 0.05,
+  "solReserve": 0.05,
+  "dryRun": true
+}
